@@ -7,6 +7,7 @@ import {
   listWorkspaces,
 } from "@/lib/research/workspaces";
 import type { Workspace } from "@/types/database";
+import { ActionFeedback } from "@/components/action-feedback";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
@@ -20,6 +21,7 @@ export function HomeView() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -50,11 +52,13 @@ export function HomeView() {
     event.preventDefault();
     setCreating(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const workspace = await createWorkspace(name);
       setWorkspaces((current) => [workspace, ...current]);
       setName("");
+      setSuccess(`Workspace "${workspace.name}" created. Open it to add research artifacts.`);
     } catch (createError) {
       setError(
         createError instanceof Error
@@ -67,22 +71,22 @@ export function HomeView() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-12 sm:px-10">
+    <main className="mx-auto w-full max-w-5xl px-6 py-12 text-zinc-200 sm:px-10">
       <header className="mb-10">
-        <p className="mb-2 text-sm font-semibold uppercase tracking-[0.18em] text-indigo-600">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-400">
           Git for Research
         </p>
-        <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
+        <h1 className="text-3xl font-semibold tracking-tight text-zinc-100">
           Research workspaces
         </h1>
-        <p className="mt-3 max-w-2xl text-slate-600">
+        <p className="mt-3 max-w-2xl text-sm text-zinc-500">
           Collect source material and preserve its first immutable version.
         </p>
       </header>
 
       <form
         onSubmit={handleCreate}
-        className="mb-10 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:flex-row"
+        className="mb-10 flex flex-col gap-3 rounded-md border border-white/8 bg-[#111318] p-4 sm:flex-row"
       >
         <label className="sr-only" htmlFor="workspace-name">
           Workspace name
@@ -92,45 +96,45 @@ export function HomeView() {
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="New workspace name"
-          className="min-w-0 flex-1 rounded-xl border border-slate-300 px-4 py-3 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+          className="min-w-0 flex-1 rounded border border-white/10 bg-[#0d0f12] px-3 py-2.5 text-sm text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-indigo-500"
           disabled={creating}
         />
         <button
           type="submit"
           disabled={creating}
-          className="rounded-xl bg-slate-950 px-5 py-3 font-medium text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+          className="rounded bg-zinc-100 px-4 py-2.5 text-sm font-medium text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
         >
           {creating ? "Creating…" : "Create workspace"}
         </button>
       </form>
 
+      {success && <div className="mb-6"><ActionFeedback tone="success" title={success} next="Open the workspace and add your first artifact." /></div>}
+
       {error && (
-        <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
-        </div>
+        <div className="mb-6"><ActionFeedback tone="error" title="Could not create workspace" detail={error} /></div>
       )}
 
       {loading ? (
-        <p className="text-slate-500">Loading workspaces…</p>
+        <p className="text-sm text-zinc-500">Loading workspaces…</p>
       ) : workspaces.length ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {workspaces.map((workspace) => (
             <Link
               key={workspace.id}
               href={`/workspace/${workspace.id}`}
-              className="group rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-indigo-300 hover:shadow-md"
+              className="group rounded-md border border-white/8 bg-[#111318] p-4 transition hover:border-white/15 hover:bg-[#14171c]"
             >
-              <h2 className="font-semibold text-slate-950 group-hover:text-indigo-700">
+              <h2 className="text-sm font-medium text-zinc-200 group-hover:text-white">
                 {workspace.name}
               </h2>
-              <p className="mt-3 text-sm text-slate-500">
+              <p className="mt-3 text-xs text-zinc-600">
                 Created {formatDate(workspace.created_at)}
               </p>
             </Link>
           ))}
         </div>
       ) : (
-        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center text-slate-500">
+        <div className="rounded-md border border-dashed border-white/10 bg-[#111318] px-6 py-12 text-center text-sm text-zinc-600">
           No workspaces yet. Create one to begin.
         </div>
       )}

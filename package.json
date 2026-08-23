@@ -11,9 +11,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
     "next": "16.3.2",
+    "node-diff3": "^3.1.2",
     "pdf-parse": "^2.4.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

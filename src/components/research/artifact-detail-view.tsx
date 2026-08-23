@@ -47,7 +47,7 @@ export function ArtifactDetailView({
   }, [artifactId, workspaceId]);
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-12 sm:px-10">
+    <main className="mx-auto min-h-screen w-full max-w-4xl px-6 py-12 text-zinc-200 sm:px-10">
       <Link href={`/workspace/${workspaceId}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-800">← Workspace</Link>
 
       {loading ? (
@@ -59,12 +59,11 @@ export function ArtifactDetailView({
       ) : (
         <article className="mt-8">
           <span className="rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700">{typeLabels[detail.artifact.type]}</span>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">{detail.artifact.name}</h1>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-zinc-100">{detail.artifact.name}</h1>
           <p className="mt-3 text-sm text-slate-500">Immutable version created {new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(detail.version.created_at))}</p>
-          <pre className="mt-8 overflow-x-auto whitespace-pre-wrap break-words rounded-2xl border border-slate-200 bg-white p-6 font-mono text-sm leading-7 text-slate-800 shadow-sm">{detail.version.content_text}</pre>
+          <pre className="mt-8 overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-white/8 bg-[#111318] p-6 font-mono text-sm leading-7 text-zinc-300">{detail.version.content_text}</pre>
         </article>
       )}
     </main>
   );
 }
-

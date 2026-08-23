@@ -1,4 +1,7 @@
+import { getData } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
+
+PDFParse.setWorker(getData());
 
 export async function extractPdfText(data: Uint8Array): Promise<string> {
   const parser = new PDFParse({ data });
@@ -16,4 +19,3 @@ export async function extractPdfText(data: Uint8Array): Promise<string> {
     await parser.destroy();
   }
 }
-

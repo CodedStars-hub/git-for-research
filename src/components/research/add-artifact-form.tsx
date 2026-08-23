@@ -8,7 +8,7 @@ import type { ArtifactType } from "@/types/database";
 
 interface AddArtifactFormProps {
   workspaceId: string;
-  onCreated: () => Promise<void>;
+  onCreated: (artifact: { name: string; type: ArtifactType }) => Promise<void>;
   onCancel: () => void;
 }
 
@@ -68,13 +68,13 @@ export function AddArtifactForm({
         normalizedContent = parseChatGptJson(await file.text());
       }
 
-      await createArtifactWithFirstVersion({
+      const created = await createArtifactWithFirstVersion({
         workspaceId,
         name,
         type,
         contentText: normalizedContent,
       });
-      await onCreated();
+      await onCreated({ name: created.artifact.name, type: created.artifact.type });
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : "Could not save artifact.",
@@ -87,10 +87,10 @@ export function AddArtifactForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="mb-8 rounded-2xl border border-indigo-200 bg-white p-5 shadow-sm"
+      className="mb-8 rounded-md border border-slate-200 bg-white p-5"
     >
       <div className="mb-5 flex items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-slate-950">Add artifact</h2>
+        <h2 className="text-base font-semibold text-slate-950">Add artifact</h2>
         <button
           type="button"
           onClick={onCancel}
@@ -106,7 +106,7 @@ export function AddArtifactForm({
           <input
             value={name}
             onChange={(event) => setName(event.target.value)}
-            className="rounded-xl border border-slate-300 px-4 py-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="h-8 rounded-md border border-slate-300 px-3 text-sm font-normal outline-none focus:border-indigo-500"
             placeholder="Literature notes"
             disabled={saving}
           />
@@ -121,7 +121,7 @@ export function AddArtifactForm({
               setFile(null);
               setError(null);
             }}
-            className="rounded-xl border border-slate-300 bg-white px-4 py-3 font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            className="h-8 rounded-md border border-slate-300 bg-white px-3 text-sm font-normal outline-none focus:border-indigo-500"
             disabled={saving}
           >
             <option value="markdown">Markdown / plaintext</option>
@@ -137,7 +137,7 @@ export function AddArtifactForm({
               value={content}
               onChange={(event) => setContent(event.target.value)}
               rows={10}
-              className="resize-y rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm font-normal outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+              className="resize-y rounded-md border border-slate-300 px-4 py-3 font-mono text-sm font-normal outline-none focus:border-indigo-500"
               placeholder="Paste or type research content…"
               disabled={saving}
             />
@@ -150,7 +150,7 @@ export function AddArtifactForm({
               type="file"
               accept={type === "pdf" ? ".pdf,application/pdf" : ".json,application/json"}
               onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-              className="rounded-xl border border-slate-300 px-4 py-3 font-normal file:mr-4 file:rounded-lg file:border-0 file:bg-slate-100 file:px-3 file:py-2 file:font-medium"
+              className="h-8 rounded-md border border-slate-300 px-2 text-sm font-normal file:mr-3 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:font-medium"
               disabled={saving}
             />
           </label>
@@ -166,15 +166,16 @@ export function AddArtifactForm({
       <button
         type="submit"
         disabled={saving}
-        className="mt-5 rounded-xl bg-indigo-600 px-5 py-3 font-medium text-white transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+        className="mt-5 h-8 rounded-md border border-slate-300 bg-white px-3 text-sm font-medium text-slate-900 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
       >
         {saving
           ? type === "pdf"
-            ? "Extracting and saving…"
-            : "Saving…"
+            ? "Processing PDF…"
+            : type === "chat"
+              ? "Processing ChatGPT export…"
+              : "Saving Markdown artifact…"
           : "Save artifact"}
       </button>
     </form>
   );
 }
-
