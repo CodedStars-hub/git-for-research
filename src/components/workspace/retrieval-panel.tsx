@@ -4,7 +4,7 @@ import { FormEvent, useState } from "react";
 import type { AssistantResponse } from "@/lib/assistant/types";
 import type { EvidenceResult } from "@/lib/retrieval/retrieval";
 
-interface RetrievalPanelProps {
+export interface RetrievalPanelProps {
   workspaceId: string;
   mode: "search" | "ask";
   branchId: string | null;
@@ -13,14 +13,26 @@ interface RetrievalPanelProps {
   artifactCount: number;
 }
 
-interface ChatEntry {
+export interface ChatEntry {
   id: string;
   role: "user" | "assistant";
   content: string;
   response?: AssistantResponse;
 }
 
-function readStoredChat(key: string): ChatEntry[] {
+export interface AssistantConversationState {
+  messages: ChatEntry[];
+  query: string;
+  loading: boolean;
+  error: string | null;
+  setQuery: (query: string) => void;
+  setLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  persist: (messages: ChatEntry[]) => void;
+  clear: () => void;
+}
+
+export function readStoredChat(key: string): ChatEntry[] {
   if (typeof window === "undefined") return [];
   try {
     const parsed = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown;
@@ -43,21 +55,14 @@ function readStoredChat(key: string): ChatEntry[] {
   }
 }
 
-export function RetrievalPanel(props: RetrievalPanelProps) {
-  return props.mode === "ask" ? <AssistantChat {...props} /> : <SearchPanel workspaceId={props.workspaceId} />;
+export function RetrievalPanel(props: RetrievalPanelProps & { conversation?: AssistantConversationState }) {
+  return props.mode === "ask" && props.conversation
+    ? <AssistantChat {...props} conversation={props.conversation} />
+    : <SearchPanel workspaceId={props.workspaceId} />;
 }
 
-function AssistantChat({ workspaceId, branchId, branchName, headCommitId, artifactCount }: RetrievalPanelProps) {
-  const storageKey = `git-for-research:assistant:${workspaceId}:${branchId ?? "no-branch"}`;
-  const [messages, setMessages] = useState<ChatEntry[]>(() => readStoredChat(storageKey));
-  const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  function persist(next: ChatEntry[]) {
-    setMessages(next);
-    localStorage.setItem(storageKey, JSON.stringify(next.slice(-20)));
-  }
+export function AssistantChat({ workspaceId, branchId, branchName, headCommitId, artifactCount, conversation, compact = false }: RetrievalPanelProps & { conversation: AssistantConversationState; compact?: boolean }) {
+  const { messages, query, loading, error, setQuery, setLoading, setError, persist, clear } = conversation;
 
   async function ask(question: string) {
     const normalized = question.trim();
@@ -102,12 +107,12 @@ function AssistantChat({ workspaceId, branchId, branchName, headCommitId, artifa
   ];
 
   return (
-    <div className="mx-auto flex min-h-[620px] max-w-4xl flex-col rounded-md border border-[#30363d] bg-[#0d1117]">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#30363d] p-4">
+    <div className={`mx-auto flex flex-col bg-[#0d1117] ${compact ? "h-full min-h-0" : "min-h-[620px] max-w-4xl rounded-md border border-[#30363d]"}`}>
+      {!compact && <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#30363d] p-4">
         <div><h2 className="text-base font-semibold text-zinc-100">Assistant</h2><p className="mt-1 text-sm text-zinc-500">Context: <span className="font-mono text-zinc-400">{branchName ?? "No branch"} @ {headCommitId?.slice(0, 7) ?? "no commits"}</span> · {artifactCount} artifact{artifactCount === 1 ? "" : "s"}</p></div>
-        {messages.length > 0 && <button onClick={() => { localStorage.removeItem(storageKey); setMessages([]); setError(null); }} className="text-xs font-medium text-zinc-500 hover:text-zinc-300">New conversation</button>}
-      </header>
-      <div className="flex-1 space-y-4 p-4">
+        {messages.length > 0 && <button onClick={clear} className="text-xs font-medium text-zinc-500 hover:text-zinc-300">New conversation</button>}
+      </header>}
+      <div className={`flex-1 space-y-4 overflow-y-auto ${compact ? "p-3" : "p-4"}`}>
         {!branchId ? <p className="text-sm text-zinc-500">Create a branch commit before asking questions about its current snapshot.</p>
         : messages.length === 0 ? <div><p className="text-sm text-zinc-500">Start with a repository-grounded question.</p><div className="mt-4 flex flex-wrap gap-2">{starters.map((starter) => <button key={starter} onClick={() => void ask(starter)} className="rounded-md border border-[#30363d] bg-[#161b22] px-3 py-2 text-left text-xs text-zinc-400 hover:border-[#58a6ff] hover:text-zinc-200">{starter}</button>)}</div></div>
         : messages.map((message) => <article key={message.id} className={message.role === "user" ? "ml-auto max-w-2xl" : "max-w-3xl"}>
@@ -120,7 +125,7 @@ function AssistantChat({ workspaceId, branchId, branchName, headCommitId, artifa
         {loading && <p className="text-sm text-zinc-500">Reviewing repository evidence…</p>}
         {error && <div role="alert" className="rounded-md border border-red-500/30 bg-red-500/8 p-3 text-sm text-red-300"><p className="font-medium">✕ Assistant could not complete the request.</p><p className="mt-1 text-xs">{error}</p><button disabled={loading} onClick={() => { const lastQuestion = [...messages].reverse().find((item) => item.role === "user")?.content; if (lastQuestion) void ask(lastQuestion); }} className="mt-2 text-xs font-medium underline disabled:opacity-50">Retry</button></div>}
       </div>
-      <form onSubmit={submit} className="flex gap-2 border-t border-[#30363d] p-4"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask anything about this research…" disabled={loading || !branchId} className="h-9 min-w-0 flex-1 rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-[#58a6ff] disabled:opacity-50"/><button disabled={loading || !branchId || !query.trim()} className="h-9 rounded-md bg-[#1f6feb] px-4 text-sm font-medium text-white hover:bg-[#388bfd] disabled:opacity-50">{loading ? "Thinking…" : "Send"}</button></form>
+      <form onSubmit={submit} className={`flex gap-2 border-t border-[#30363d] ${compact ? "p-3" : "p-4"}`}><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Ask anything about this research…" disabled={loading || !branchId} className="h-9 min-w-0 flex-1 rounded-md border border-[#30363d] bg-[#010409] px-3 text-sm text-zinc-100 outline-none placeholder:text-zinc-600 focus:border-[#58a6ff] disabled:opacity-50"/><button disabled={loading || !branchId || !query.trim()} className="h-9 rounded-md bg-[#1f6feb] px-4 text-sm font-medium text-white hover:bg-[#388bfd] disabled:opacity-50">{loading ? "Thinking…" : "Send"}</button></form>
     </div>
   );
 }

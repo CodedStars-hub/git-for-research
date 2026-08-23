@@ -9,7 +9,8 @@ import { getWorkspace } from "@/lib/research/workspaces";
 import type { VersioningState } from "@/lib/versioning/types";
 import type { Artifact, Workspace } from "@/types/database";
 import { CollaborativeEditor } from "@/components/workspace/collaborative-editor";
-import { RetrievalPanel } from "@/components/workspace/retrieval-panel";
+import { RetrievalPanel, readStoredChat, type ChatEntry } from "@/components/workspace/retrieval-panel";
+import { FloatingAssistant } from "@/components/workspace/floating-assistant";
 import { SinceLeftPanel } from "@/components/workspace/since-left-panel";
 import { AddArtifactForm } from "./add-artifact-form";
 import { VersionControlPanel } from "./version-control-panel";
@@ -47,6 +48,10 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   const [historyCommitId, setHistoryCommitId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; detail?: string; next?: string } | null>(null);
   const [branchSwitching, setBranchSwitching] = useState(false);
+  const [assistantMessages, setAssistantMessages] = useState<Record<string, ChatEntry[]>>({});
+  const [assistantQuery, setAssistantQuery] = useState("");
+  const [assistantLoading, setAssistantLoading] = useState(false);
+  const [assistantError, setAssistantError] = useState<string | null>(null);
 
   const reload = useCallback(async (branchId?: string) => {
     const [nextWorkspace, nextArtifacts, nextState] = await Promise.all([getWorkspace(workspaceId), listArtifacts(workspaceId), getVersioning(workspaceId, branchId)]);
@@ -86,6 +91,27 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
   }, [refreshVersioning]);
   if (loading) return <main className="grid min-h-screen place-items-center bg-[#090a0c] text-sm text-zinc-500">Loading workspace…</main>;
   if (error || !workspace || !state) return <main className="min-h-screen bg-[#090a0c] p-8 text-zinc-300"><Link href="/" className="text-indigo-400">← Workspaces</Link><p className="mt-6 text-red-400">{error ?? "Workspace not found."}</p></main>;
+  const assistantStorageKey = `git-for-research:assistant:${workspaceId}:${state.selectedBranch?.id ?? "no-branch"}`;
+  const currentAssistantMessages = assistantMessages[assistantStorageKey] ?? readStoredChat(assistantStorageKey);
+  const assistantConversation = {
+    messages: currentAssistantMessages,
+    query: assistantQuery,
+    loading: assistantLoading,
+    error: assistantError,
+    setQuery: setAssistantQuery,
+    setLoading: setAssistantLoading,
+    setError: setAssistantError,
+    persist: (messages: ChatEntry[]) => {
+      const bounded = messages.slice(-20);
+      setAssistantMessages((current) => ({ ...current, [assistantStorageKey]: bounded }));
+      localStorage.setItem(assistantStorageKey, JSON.stringify(bounded));
+    },
+    clear: () => {
+      setAssistantMessages((current) => ({ ...current, [assistantStorageKey]: [] }));
+      localStorage.removeItem(assistantStorageKey);
+      setAssistantError(null);
+    },
+  };
   const versioningProps = { workspaceId, state, refreshVersioning, workingEdit: selected?.type === "markdown" && workingContent !== null ? { artifactId: selected.artifactId, contentText: workingContent } : null, onProtectedMain: () => setView("branches"), requestedMerge: mergeRequest, requestedCommitId: historyCommitId, onCommitComplete: () => { setWorkingContent(null); setRefreshToken((value) => value + 1); } };
 
   return <main className="flex min-h-screen flex-col bg-[#090a0c] text-zinc-200">
@@ -108,10 +134,11 @@ export function WorkspaceView({ workspaceId }: { workspaceId: string }) {
         <section className="min-w-0 bg-[#0d0f12]">{selected.type === "markdown" ? <CollaborativeEditor key={`${selected.artifactId}:${identity}:${state?.selectedBranch?.id ?? "main"}`} workspaceId={workspaceId} artifact={selected} identity={identity} onWorkingChange={onWorkingChange} onPresenceChange={setPresence} /> : <div className="p-6"><div className="mb-4 flex items-center justify-between gap-4"><h2 className="text-base font-semibold">{selected.name}</h2>{state?.selectedBranch && (state.selectedBranch.name === "main" && state.selectedBranch.head_commit_id ? <button onClick={() => setView("branches")} className="h-8 rounded-md bg-[#238636] px-3 text-sm font-semibold text-white">Create branch to update</button> : <ArtifactVersionUpload workspaceId={workspaceId} branchId={state.selectedBranch.id} artifact={selected} onCommitted={async () => { const items = await reload(state.selectedBranch?.id); setArtifactId(items.find((item) => item.id === selected.artifactId)?.id ?? selected.artifactId); setRefreshToken((value) => value + 1); }} />)}</div><pre className="whitespace-pre-wrap rounded-md border border-white/8 bg-[#111318] p-4 font-mono text-xs leading-6 text-zinc-400">{selected.contentText}</pre></div>}</section>
         <aside className="overflow-y-auto border-l border-white/8">{state?.selectedBranch && <SinceLeftPanel workspaceId={workspaceId} branchId={state.selectedBranch.id} identity={identity} refreshKey={refreshToken} />}<div className="p-4"><h3 className="text-sm font-semibold text-zinc-300">Live collaborators</h3><div className="mt-2 space-y-2">{presence.length ? presence.map((person) => <div key={person.identity} className="flex items-center gap-2 text-xs"><span className={`size-1.5 rounded-full ${person.status === "editing" ? "bg-amber-400" : "bg-emerald-400"}`} /><span>{person.identity}</span><span className="ml-auto text-zinc-600">{person.status}</span></div>) : <p className="text-xs text-zinc-600">Open a Markdown artifact to join.</p>}</div></div><div className="border-t border-white/8 p-4"><h3 className="text-sm font-semibold text-zinc-300">Recent commits</h3><div className="mt-2 space-y-1">{state?.commits.slice(0, 4).map((commit) => <button key={commit.id} onClick={() => { setHistoryCommitId(commit.id); setView("history"); }} className="block w-full rounded-md px-2 py-1.5 text-left text-xs hover:bg-white/5"><span className="block truncate text-zinc-300">{commit.message}</span><code className="text-[#58a6ff]">{commit.id.slice(0, 7)}</code></button>)}{!state?.commits.length && <p className="text-xs text-zinc-600">No commits yet.</p>}</div></div><div className="border-t border-white/8 p-4"><h3 className="text-sm font-semibold text-zinc-300">Artifact metadata</h3><p className="mt-2 text-xs text-zinc-500">{selected.type} · <span className="font-mono">{selected.artifactVersionId.slice(0, 7)}</span></p></div></aside>
       </div>
-      : view === "search" || view === "ask" ? <RetrievalPanel key={`${view}:${state?.selectedBranch?.id ?? "no-branch"}`} workspaceId={workspaceId} mode={view} branchId={state?.selectedBranch?.id ?? null} branchName={state?.selectedBranch?.name ?? null} headCommitId={state?.selectedBranch?.head_commit_id ?? null} artifactCount={state?.selectedBranch?.head_commit_id ? state.snapshot.length : 0} />
+      : view === "search" || view === "ask" ? <RetrievalPanel key={`${view}:${state.selectedBranch?.id ?? "no-branch"}`} workspaceId={workspaceId} mode={view} branchId={state.selectedBranch?.id ?? null} branchName={state.selectedBranch?.name ?? null} headCommitId={state.selectedBranch?.head_commit_id ?? null} artifactCount={state.selectedBranch?.head_commit_id ? state.snapshot.length : 0} conversation={assistantConversation} />
       : view === "reviews" || view === "ci" ? <ResearchIntelligencePanel workspaceId={workspaceId} branches={state?.branches ?? []} selectedBranchId={selectedBranchId} mode={view} onContinueToMerge={(sourceBranchId, targetBranchId, reviewId) => { setMergeRequest({ sourceBranchId, targetBranchId, reviewId }); setSelectedBranchId(targetBranchId); setView("branches"); }} />
       : <div className="mx-auto max-w-5xl [&_.bg-white]:bg-[#0d1117] [&_.bg-slate-50]:bg-[#161b22] [&_.text-slate-950]:text-[#f0f6fc] [&_.text-slate-700]:text-[#c9d1d9] [&_.text-slate-600]:text-[#8b949e] [&_.text-slate-500]:text-[#8b949e] [&_.text-slate-400]:text-[#6e7681] [&_.border-slate-200]:border-[#30363d] [&_.border-slate-300]:border-[#30363d] [&_input]:bg-[#0d1117] [&_input]:text-zinc-200 [&_select]:bg-[#21262d] [&_select]:text-zinc-200 [&_textarea]:bg-[#0d1117] [&_textarea]:text-zinc-200"><VersionControlPanel key={`${view}:${mergeRequest?.reviewId ?? state.selectedBranch?.id ?? "none"}`} {...versioningProps} mode={view === "branches" ? "branches" : view === "commit" ? "commit" : "history"} /></div>}
     </div>
+    <FloatingAssistant workspace={{ id: workspaceId, name: workspace.name, branchId: state.selectedBranch?.id ?? null, branchName: state.selectedBranch?.name ?? null, headCommitId: state.selectedBranch?.head_commit_id ?? null, artifactCount: state.selectedBranch?.head_commit_id ? state.snapshot.length : 0, conversation: assistantConversation, onExpand: () => setView("ask") }} />
   </main>;
 }
 
