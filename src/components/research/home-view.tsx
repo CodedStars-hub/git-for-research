@@ -49,6 +49,12 @@ export function HomeView() {
     };
   }, []);
 
+  useEffect(() => {
+    if (window.location.hash === "#new-workspace") {
+      document.getElementById("workspace-name")?.focus();
+    }
+  }, []);
+
   async function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setCreating(true);
@@ -87,6 +93,7 @@ export function HomeView() {
       </header>
 
       <form
+        id="new-workspace"
         onSubmit={handleCreate}
         className="mb-8 rounded-md border border-[#30363d] bg-[#0d1117] p-4"
       >

@@ -36,3 +36,18 @@ export async function createWorkspace(name: string): Promise<Workspace> {
   return data as Workspace;
 }
 
+export async function renameWorkspace(id: string, name: string): Promise<Workspace> {
+  const normalizedName = name.trim();
+  if (!normalizedName) throw new Error("Workspace name cannot be empty.");
+  if (normalizedName.length > 120) throw new Error("Workspace name must be 120 characters or fewer.");
+
+  const { data, error } = await supabase
+    .from("workspaces")
+    .update({ name: normalizedName })
+    .eq("id", id)
+    .select("id, name, created_at")
+    .single();
+
+  if (error) throw new Error(`Could not rename workspace: ${error.message}`);
+  return data as Workspace;
+}
